@@ -27,8 +27,10 @@ class Simulator:
         self.particle_rho = ti.field(dtype=ti.f32)
         particle = ti.root.dynamic(ti.i, 2**30, 2**14)
         particle.place(self.particle_rho)
-        frame_dt = 1.0 / phys_args.fps
-        dt = frame_dt / phys_args.mpm_iter_cnt
+        # frame_dt = 1.0 / phys_args.fps
+        # dt = frame_dt / phys_args.mpm_iter_cnt
+        frame_dt = 0.0417
+        dt = 1e-4
         self.sim = MPMSimulator(ti.f32, dt, frame_dt, 
                                 particle, self.dx, 
                                 self.inv_dx, 
@@ -162,9 +164,14 @@ class Simulator:
         velocities += torch.cross(omega, self.vol - centroid) 
         return velocities
 
-    def initialize(self, phys_args=None):
+    def initialize(self, phys_args=None, vol=None):
         self.reload(phys_args)
-        self.compute_particle_vol()
+        if vol is None:
+            self.compute_particle_vol()
+        else:
+            print('reading vol from file')
+            for p in range(self.num_particles[None]):
+                self.sim.p_vol[p] = vol[p]
         cnt = self.vol.shape[0]
         velocities = self.vel.repeat(cnt).reshape(cnt, -1)
         # velocities = self.compute_velocities()

@@ -155,6 +155,7 @@ def get_combined_args(parser: ArgumentParser):
     # except TypeError:
     except Exception as e: 
         print("Config file not found at")
+        cfgfile_string = "Namespace()"
         pass
     args_cfgfile = eval(cfgfile_string)
 
