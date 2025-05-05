@@ -22,19 +22,6 @@ from tqdm import tqdm
 from utils.vis_utils import save_pointcloud_video
 from new_trajectory import load_pcd_file
 
-def read_estimation_result(dataset: ModelParams, phys_args):
-    files = os.listdir(dataset.model_path)
-    pred_json = [f for f in files if "-pred.json" in f]
-    result_json = None
-    result = None
-    if len(pred_json) == 0:
-        print('Cannot find estimation result')
-
-    with open(os.path.join(dataset.model_path, "debug.json".format(str(phys_args.config_id))), 'r') as f:
-        print(f'Load file: {result_json}')
-        result = json.load(f)
-    return result
-
 if __name__ == "__main__":
     start_time = time.time()
 
@@ -59,9 +46,11 @@ if __name__ == "__main__":
     # 0. Load trained pcd
     # vol = load_pcd_file(dataset.model_path, gs_args.iteration)
 
-    model_metas = h5py.File(os.path.join('/mnt/kostas-graid/datasets/chenwang/traj/ObjaverseXL_sketchfab/raw/hf-objaverse-v1/outputs_v6', "118731_001.h5"), 'r')
-    model_pcls = torch.from_numpy(np.array(model_metas['x']))
-    vol = ((model_pcls[0] - 5)).to(device='cuda', dtype=torch.float32).contiguous()
+    obj_id = '34002_002'
+    model_metas = h5py.File(os.path.join('/mnt/kostas-graid/datasets/chenwang/traj/ObjaverseXL_sketchfab/raw/hf-objaverse-v1/outputs_v6', f"{obj_id}.h5"), 'r')
+    model_pcls = torch.from_numpy(np.array(model_metas['x'])) - 5
+    model_pcls[:, :, 1] = model_pcls[:, :, 1] - (np.array(model_metas['floor_height']).item() - 5) # move floor to 0
+    vol = model_pcls[0].to(device='cuda', dtype=torch.float32).contiguous()
     # estimation_params = Namespace(**read_estimation_result(dataset, phys_args))
 
     estimation_params = phys_args
@@ -69,22 +58,22 @@ if __name__ == "__main__":
     estimation_params['mat_params']['E'] = np.array(model_metas['E']).item()
     estimation_params['mat_params']['nu'] = np.array(model_metas['nu']).item()
     estimation_params['voxel_size'] = 0.08
-    estimation_params['bc']['ground'][0][1] = (np.array(model_metas['floor_height']).item() - 5)
+    # estimation_params['bc']['ground'][0][1] = (np.array(model_metas['floor_height']).item() - 5)
     phys_args = Namespace(**estimation_params)
     print(phys_args)
     
     simulator = Simulator(phys_args, vol)
     max_f = phys_args.predict_frames
-    pos = [vol.clone().cpu().numpy()]
-    # idx = np.random.choice(116279, 2048, replace=False)
+    pos = []
     with torch.no_grad():
         simulator.initialize(vol=torch.from_numpy(np.array(model_metas['vol'])).to(device='cuda', dtype=torch.float32).contiguous())
-        # simulator.initialize()
+        simulator.initialize()
         for f in tqdm(range(max_f)):
             xyz = simulator.forward(f)
-            # print(xyz)
-            # xyz_vis = xyz[idx, :].cpu().numpy()
             pos.append(xyz.clone().cpu().numpy())
 
     pos = np.array(pos)
-    save_pointcloud_video(pos, ((model_pcls-5)).cpu().numpy(), os.path.join('./output/debug', "video.gif"), fps=24, point_color='blue', vis_flag='objaverse')
+    name = f'{obj_id}-{phys_args.mpm_iter_cnt}.npz'
+    output_dir = os.path.join(f'./output/{obj_id}')
+    np.savez(os.path.join(output_dir, f"{name}.npz"), pos=pos)
+    save_pointcloud_video(pos, model_pcls.cpu().numpy()[:48], os.path.join(output_dir, f"{name}.gif"), fps=24, point_color='blue', vis_flag='objaverse')

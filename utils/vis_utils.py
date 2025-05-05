@@ -6,6 +6,7 @@ import json
 from PIL import Image
 from io import BytesIO
 import sys, pathlib, html
+import torch
 
 def camera_view_dir_y(elev, azim):
     """Unit vector for camera direction with Y as 'up'."""
@@ -53,9 +54,9 @@ def save_pointcloud_video(points_pred, points_gt, save_path, drag_mask=None, fps
     
     for label, points in [('pred', points_pred), ('gt', points_gt)]:
         
-        for i in range(points.shape[0]):
+        for i in range(len(points)):
             
-            frame_points = points[i]
+            frame_points = points[i].cpu().numpy() if isinstance(points[i], torch.Tensor) else points[i]
             if drag_mask is not None and not (drag_mask == True).all():
                 drag_mask = (drag_mask == 1.0)
                 drag_points = frame_points[drag_mask]
